@@ -8,7 +8,6 @@ from typing import Tuple
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.webdriver import WebDriver
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from zeit_on_tolino.env_vars import EnvVars, MissingEnvironmentVariable
@@ -33,6 +32,15 @@ def _wait_for_any_element(webdriver: WebDriver, selectors: Tuple[Tuple[str, str]
         return False
 
     return WebDriverWait(webdriver, timeout).until(_find_any)
+
+
+def _wait_for_post_login_page(webdriver: WebDriver) -> None:
+    post_login_selectors = (
+        (By.CLASS_NAME, "page-section-header"),
+        (By.XPATH, f'//a[normalize-space()="{BUTTON_TEXT_TO_RECENT_EDITION}"]'),
+        (By.XPATH, f'//a[normalize-space()="{BUTTON_TEXT_DOWNLOAD_EPUB}"]'),
+    )
+    _wait_for_any_element(webdriver, post_login_selectors)
 
 
 def _get_credentials() -> Tuple[str, str]:
@@ -82,7 +90,10 @@ def _login(webdriver: WebDriver) -> None:
     if "anmelden" in webdriver.current_url:
         raise RuntimeError("Failed to login, check your login credentials.")
 
-    WebDriverWait(webdriver, Delay.medium).until(EC.presence_of_element_located((By.CLASS_NAME, "page-section-header")))
+    try:
+        _wait_for_post_login_page(webdriver)
+    except TimeoutException as exc:
+        raise RuntimeError("Failed to detect ZEIT post-login page. The ZEIT website may have changed.") from exc
 
 
 def _get_latest_downloaded_file_path(download_dir: str) -> Path:

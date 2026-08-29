@@ -71,3 +71,26 @@ def test__wait_for_any_element__times_out() -> None:
 
     with pytest.raises(TimeoutException):
         zeit._wait_for_any_element(webdriver, ((By.ID, "missing"),), timeout=0.1)
+
+
+def test__wait_for_post_login_page__checks_multiple_selectors(monkeypatch) -> None:
+    webdriver = MagicMock()
+    captured = {}
+
+    def _fake_wait_for_any_element(driver, selectors, timeout=zeit.Delay.medium):
+        captured["driver"] = driver
+        captured["selectors"] = selectors
+        captured["timeout"] = timeout
+        return object()
+
+    monkeypatch.setattr(zeit, "_wait_for_any_element", _fake_wait_for_any_element)
+
+    zeit._wait_for_post_login_page(webdriver)
+
+    assert captured["driver"] is webdriver
+    assert captured["timeout"] == zeit.Delay.medium
+    assert captured["selectors"] == (
+        (By.CLASS_NAME, "page-section-header"),
+        (By.XPATH, f'//a[normalize-space()="{zeit.BUTTON_TEXT_TO_RECENT_EDITION}"]'),
+        (By.XPATH, f'//a[normalize-space()="{zeit.BUTTON_TEXT_DOWNLOAD_EPUB}"]'),
+    )
