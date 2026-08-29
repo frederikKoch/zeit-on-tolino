@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Tuple
 
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
@@ -21,6 +22,18 @@ BUTTON_TEXT_DOWNLOAD_EPUB = "EPUB FÜR E-READER LADEN"
 BUTTON_TEXT_EPUB_DOWNLOAD_IS_PENDING = "EPUB FOLGT IN KÜRZE"
 
 log = logging.getLogger(__name__)
+
+
+def _wait_for_any_element(webdriver: WebDriver, selectors: Tuple[Tuple[str, str], ...], timeout: int = Delay.medium):
+    def _find_any(driver: WebDriver):
+        for by, value in selectors:
+            elements = driver.find_elements(by, value)
+            if elements:
+                return elements[0]
+        return False
+
+    return WebDriverWait(webdriver, timeout).until(_find_any)
+
 
 def _get_credentials() -> Tuple[str, str]:
     try:
@@ -39,13 +52,31 @@ def _login(webdriver: WebDriver) -> None:
     username, password = _get_credentials()
     webdriver.get(ZEIT_LOGIN_URL)
 
-    username_field = webdriver.find_element(By.ID, "login_email")
-    username_field.send_keys(username)
-    password_field = webdriver.find_element(By.ID, "login_pass")
-    password_field.send_keys(password)
+    username_selectors = (
+        (By.ID, "login_email"),
+        (By.CSS_SELECTOR, 'input[name="email"]'),
+        (By.CSS_SELECTOR, 'input[type="email"]'),
+    )
+    password_selectors = (
+        (By.ID, "login_pass"),
+        (By.CSS_SELECTOR, 'input[name="password"]'),
+        (By.CSS_SELECTOR, 'input[type="password"]'),
+    )
+    submit_button_selectors = (
+        (By.CSS_SELECTOR, "button.submit-button.log"),
+        (By.CSS_SELECTOR, 'button[type="submit"]'),
+        (By.CSS_SELECTOR, 'input[type="submit"]'),
+    )
 
-    btn = webdriver.find_element(By.CLASS_NAME, "submit-button.log")
-    btn.click()
+    try:
+        username_field = _wait_for_any_element(webdriver, username_selectors)
+        username_field.send_keys(username)
+        password_field = _wait_for_any_element(webdriver, password_selectors)
+        password_field.send_keys(password)
+        btn = _wait_for_any_element(webdriver, submit_button_selectors)
+        btn.click()
+    except TimeoutException as exc:
+        raise RuntimeError("Failed to locate ZEIT login form elements. The ZEIT login page may have changed.") from exc
     time.sleep(Delay.small)
 
     if "anmelden" in webdriver.current_url:
